@@ -855,8 +855,14 @@ class Object(Type):
         return result
 
     def match(self, label, pred):
-        scores = self.score(label, pred)
-        return np.mean(scores.values()) > self._sim_threshold
+        _label = self.validate(label)
+        _pred = self.validate(pred)
+        result = {}
+        for name, validator in self._named_validators:
+            if name in _label:
+                result[name] = validator.match(_label[name], _pred[name])
+
+        return result
 
 
 @Object.register_factory
