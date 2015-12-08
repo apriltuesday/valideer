@@ -8,11 +8,16 @@ __all__ = [
     "ValidationError", "SchemaError", "Validator", "accepts", "returns", "adapts",
     "parse", "parsing", "register", "register_factory",
     "set_name_for_types", "reset_type_names",
+    "get_named_validator",
 ]
 
 _NAMED_VALIDATORS = {}
 _VALIDATOR_FACTORIES = []
 _VALIDATOR_FACTORIES_LOCK = RLock()
+
+
+def get_named_validator(name):
+    return _NAMED_VALIDATORS[name] if name in _NAMED_VALIDATORS else None
 
 
 class SchemaError(Exception):
