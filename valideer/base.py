@@ -239,6 +239,16 @@ class Validator(object):
         """
         raise NotImplementedError
 
+    def score(self, label, pred):
+        '''Score how similar a prediction is to its true label.
+        '''
+        raise NotImplementedError
+
+    def match(self, label, pred):
+        '''Match a prediction is to its true label.
+        '''
+        raise NotImplementedError
+
     def is_valid(self, value):
         """Check if the value is valid.
 

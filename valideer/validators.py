@@ -5,6 +5,9 @@ import datetime
 import inspect
 import numbers
 import re
+from fuzzywuzzy import fuzz
+import numpy as np
+from sklearn.utils import linear_assignment_
 
 __all__ = [
     "AnyOf", "AllOf", "ChainOf", "Nullable", "NonNullable",
@@ -35,6 +38,16 @@ class AnyOf(Validator):
                 msgs.append(ex.msg)
         raise ValidationError(" or ".join(msgs), value)
 
+    def score(self, label, pred):
+        _label = self.validate(label)
+        _pred = self.validate(pred)
+        return np.max([validator.score(_label, _pred) for validator in self._validators])
+
+    def match(self, label, pred):
+        _label = self.validate(label)
+        _pred = self.validate(pred)
+        return any([validator.match(_label, _pred) for validator in self._validators])
+
     @property
     def humanized_name(self):
         return " or ".join(v.humanized_name for v in self._validators)
@@ -56,6 +69,16 @@ class AllOf(Validator):
             result = validator.validate(value, adapt)
         return result
 
+    def score(self, label, pred):
+        _label = self.validate(label)
+        _pred = self.validate(pred)
+        return np.min([validator.score(_label, _pred) for validator in self._validators])
+
+    def match(self, label, pred):
+        _label = self.validate(label)
+        _pred = self.validate(pred)
+        return all([validator.match(_label, _pred) for validator in self._validators])
+
     @property
     def humanized_name(self):
         return " and ".join(v.humanized_name for v in self._validators)
@@ -74,6 +97,16 @@ class ChainOf(Validator):
         for validator in self._validators:
             value = validator.validate(value, adapt)
         return value
+
+    def score(self, label, pred):
+        _label = self.validate(label)
+        _pred = self.validate(pred)
+        return self._validators[-1].score(_label, _pred)
+
+    def match(self, label, pred):
+        _label = self.validate(label)
+        _pred = self.validate(pred)
+        return self._validators[-1].match(_label, _pred)
 
     @property
     def humanized_name(self):
@@ -110,6 +143,14 @@ class Nullable(Validator):
         if value is None:
             return self.default
         return self._validator.validate(value, adapt)
+
+    def score(self, label, pred):
+        _label = self.validate(label)
+        _pred = self.validate(pred)
+        return self._validator.score(_label, _pred)
+
+    def match(self, label, pred):
+        return self._validator.match(label, pred)
 
     @property
     def default(self):
@@ -152,6 +193,15 @@ class NonNullable(Validator):
             return self._validator.validate(value, adapt)
         return value
 
+    def score(self, label, pred):
+        _label = self.validate(label)
+        _pred = self.validate(pred)
+        return self._validator.score(_label, _pred)
+
+    def match(self, label, pred):
+        return self._validator.match(label, pred)
+
+
     @property
     def humanized_name(self):
         return self._validator.humanized_name if self._validator else "non null"
@@ -190,6 +240,12 @@ class Enum(Validator):
             pass
         self.error(value)
 
+    def score(self, label, pred):
+        return float(label == pred)
+
+    def match(self, label, pred):
+        return label == pred
+
     @property
     def humanized_name(self):
         return "one of {%s}" % ", ".join(list(imap(repr, self.values)))
@@ -220,6 +276,12 @@ class Condition(Validator):
             self.error(value)
 
         return value
+
+    def score(self, label, pred):
+        return float(label == pred)
+
+    def match(self, label, pred):
+        return label == pred
 
     def error(self, value):
         raise ValidationError("must satisfy predicate %s" % self.humanized_name, value)
@@ -257,6 +319,12 @@ class AdaptBy(Validator):
             return self._adaptor(value)
         except self._traps as ex:
             raise ValidationError(str(ex), value)
+
+    def score(self, label, pred):
+        return float(label == pred)
+
+    def match(self, label, pred):
+        return label == pred
 
 
 class AdaptTo(AdaptBy):
@@ -306,6 +374,12 @@ class Type(Validator):
         if not isinstance(value, self.accept_types) or isinstance(value, self.reject_types):
             self.error(value)
         return value
+
+    def score(self, label, pred):
+        return float(label == pred)
+
+    def match(self, label, pred):
+        return label == pred
 
     @property
     def humanized_name(self):
@@ -367,6 +441,14 @@ class Range(Validator):
 
         return value
 
+    def score(self, label, pred):
+        _label = self.validate(label)
+        _pred = self.validate(pred)
+        return self._validator.score(_label, _pred)
+
+    def match(self, label, pred):
+        return self._validator.match(label, pred)
+
 
 class Number(Type):
     """A validator that accepts any numbers (but not bool)."""
@@ -403,17 +485,21 @@ class String(Type):
     name = "string"
     accept_types = string_types
 
-    def __init__(self, min_length=None, max_length=None):
+    def __init__(self, min_length=None, max_length=None, sim_threshold=0.8, sim_lower=True):
         """Instantiate a String validator.
 
         :param min_length: If not None, strings shorter than ``min_length`` are
             invalid.
         :param max_length: If not None, strings longer than ``max_length`` are
             invalid.
+        :param sim_threshold: Similarity threshold for fuzzy matching
+        :param sim_lower: If similarity should be computed based on lower case strings
         """
         super(String, self).__init__()
         self._min_length = min_length
         self._max_length = max_length
+        self._sim_threshold = sim_threshold
+        self._sim_lower = sim_lower
 
     def validate(self, value, adapt=True):
         super(String, self).validate(value)
@@ -424,6 +510,13 @@ class String(Type):
             raise ValidationError("must be at most %d characters long" %
                                   self._max_length, value)
         return value
+
+    def score(self, label, pred):
+        return fuzz.ratio(label.lower(), pred.lower()) / 100.0 if self._sim_lower else \
+            fuzz.ratio(label, pred) / 100.0
+
+    def match(self, label, pred):
+        return self.score(label, pred) > self._sim_threshold
 
 
 _SRE_Pattern = type(re.compile(""))
@@ -469,7 +562,7 @@ class HomogeneousSequence(Type):
     accept_types = collections.Sequence
     reject_types = string_types
 
-    def __init__(self, item_schema=None, min_length=None, max_length=None):
+    def __init__(self, item_schema=None, min_length=None, max_length=None, sim_threshold=0.8):
         """Instantiate a :py:class:`HomogeneousSequence` validator.
 
         :param item_schema: If not None, the schema of the items of the list.
@@ -481,6 +574,7 @@ class HomogeneousSequence(Type):
             self._item_validator = None
         self._min_length = min_length
         self._max_length = max_length
+        self._sim_threshold = sim_threshold
 
     def validate(self, value, adapt=True):
         super(HomogeneousSequence, self).validate(value)
@@ -496,6 +590,24 @@ class HomogeneousSequence(Type):
             return value.__class__(self._iter_validated_items(value, adapt))
         for _ in self._iter_validated_items(value, adapt):
             pass
+
+    def score(self, label, pred):
+        if self._item_validator is None:
+            return float(label == pred)
+
+        # We will try to find the best assignment for each item using Hungarian algorithm
+        _label = self.validate(label)
+        _pred = self.validate(pred)
+        cost_mat = np.zeros((len(_label), len(_pred)))
+        for i, lab in enumerate(_label):
+            for j, pre in enumerate(_pred):
+                cost_mat[i, j] = 1.0 - self._item_validator.score(lab, pre)
+
+        return [1.0 - cost_mat[i, j] for i, j in linear_assignment_(cost_mat)]
+
+    def match(self, label, pred):
+        scores = self.score(label, pred)
+        return np.mean(scores) > self._sim_threshold
 
     def _iter_validated_items(self, value, adapt):
         validate_item = self._item_validator.validate
@@ -522,13 +634,14 @@ class HeterogeneousSequence(Type):
     accept_types = collections.Sequence
     reject_types = string_types
 
-    def __init__(self, *item_schemas):
+    def __init__(self, sim_threshold=0.8, *item_schemas):
         """Instantiate a :py:class:`HeterogeneousSequence` validator.
 
         :param item_schemas: The schema of each element of the the tuple.
         """
         super(HeterogeneousSequence, self).__init__()
         self._item_validators = list(imap(parse, item_schemas))
+        self._sim_threshold = sim_threshold
 
     def validate(self, value, adapt=True):
         super(HeterogeneousSequence, self).validate(value)
@@ -539,6 +652,15 @@ class HeterogeneousSequence(Type):
             return value.__class__(self._iter_validated_items(value, adapt))
         for _ in self._iter_validated_items(value, adapt):
             pass
+
+    def score(self, label, pred):
+        _label = self.validate(label)
+        _pred = self.validate(pred)
+        return [val.score(lab, pre) for val, lab, pre in zip(self._item_validators, _label, _pred)]
+
+    def match(self, label, pred):
+        scores = self.score(label, pred)
+        return np.mean(scores) > self._sim_threshold
 
     def _iter_validated_items(self, value, adapt):
         for i, (validator, item) in enumerate(izip(self._item_validators, value)):
@@ -563,11 +685,12 @@ class Mapping(Type):
 
     accept_types = collections.Mapping
 
-    def __init__(self, key_schema=None, value_schema=None):
+    def __init__(self, key_schema=None, value_schema=None, sim_threshold=0.8):
         """Instantiate a :py:class:`Mapping` validator.
 
         :param key_schema: If not None, the schema of the dict keys.
         :param value_schema: If not None, the schema of the dict values.
+        :param sim_threshold: similarity threshold for matching
         """
         super(Mapping, self).__init__()
         if key_schema is not None:
@@ -579,12 +702,23 @@ class Mapping(Type):
         else:
             self._value_validator = None
 
+        self._sim_threshold = sim_threshold
+
     def validate(self, value, adapt=True):
         super(Mapping, self).validate(value)
         if adapt:
             return dict(self._iter_validated_items(value, adapt))
         for _ in self._iter_validated_items(value, adapt):
             pass
+
+    def score(self, label, pred):
+        _label = self.validate(label)
+        _pred = self.validate(pred)
+        return {k: self._value_validator.score(v, _pred[k]) for k, v in iteritems(_label)}
+
+    def match(self, label, pred):
+        scores = self.score(label, pred)
+        return np.mean(scores.values()) > self._sim_threshold
 
     def _iter_validated_items(self, value, adapt):
         validate_key = validate_value = None
@@ -618,7 +752,7 @@ class Object(Type):
     REMOVE = object()
 
     def __init__(self, optional={}, required={}, additional=None,
-                 ignore_optional_errors=None):
+                 ignore_optional_errors=None, sim_threshold=0.8):
         """Instantiate an Object validator.
 
         :param optional: The schema of optional properties, specified as a
@@ -641,6 +775,7 @@ class Object(Type):
             - ``False`` invalid optional properties raise ValidationError.
             - ``None`` use the value of the ``IGNORE_OPTIONAL_PROPERTY_ERRORS``
               class attribute.
+        :param sim_threshold: similarity threshold for matching
         """
         super(Object, self).__init__()
         if additional is None:
@@ -657,6 +792,7 @@ class Object(Type):
         self._all_keys = set(name for name, _ in self._named_validators)
         self._additional = additional
         self._ignore_optional_errors = ignore_optional_errors
+        self._sim_threshold = sim_threshold
 
     def validate(self, value, adapt=True):
         super(Object, self).validate(value)
@@ -707,6 +843,20 @@ class Object(Type):
                             raise ex.add_context(name)
 
         return result
+
+    def score(self, label, pred):
+        _label = self.validate(label)
+        _pred = self.validate(pred)
+        result = {}
+        for name, validator in self._named_validators:
+            if name in _label:
+                result[name] = validator.score(_label[name], _pred[name])
+
+        return result
+
+    def match(self, label, pred):
+        scores = self.score(label, pred)
+        return np.mean(scores.values()) > self._sim_threshold
 
 
 @Object.register_factory
