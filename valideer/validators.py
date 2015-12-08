@@ -150,7 +150,9 @@ class Nullable(Validator):
         return self._validator.score(_label, _pred)
 
     def match(self, label, pred):
-        return self._validator.match(label, pred)
+        _label = self.validate(label)
+        _pred = self.validate(pred)
+        return self._validator.match(_label, _pred)
 
     @property
     def default(self):
@@ -199,8 +201,9 @@ class NonNullable(Validator):
         return self._validator.score(_label, _pred)
 
     def match(self, label, pred):
-        return self._validator.match(label, pred)
-
+        _label = self.validate(label)
+        _pred = self.validate(pred)
+        return self._validator.match(_label, _pred)
 
     @property
     def humanized_name(self):
@@ -241,10 +244,10 @@ class Enum(Validator):
         self.error(value)
 
     def score(self, label, pred):
-        return float(label == pred)
+        return float(self.match(label, pred))
 
     def match(self, label, pred):
-        return label == pred
+        return self.validate(label) == self.validate(pred)
 
     @property
     def humanized_name(self):
@@ -278,10 +281,10 @@ class Condition(Validator):
         return value
 
     def score(self, label, pred):
-        return float(label == pred)
+        return float(self.match(label, pred))
 
     def match(self, label, pred):
-        return label == pred
+        return self.validate(label) == self.validate(pred)
 
     def error(self, value):
         raise ValidationError("must satisfy predicate %s" % self.humanized_name, value)
@@ -321,10 +324,10 @@ class AdaptBy(Validator):
             raise ValidationError(str(ex), value)
 
     def score(self, label, pred):
-        return float(label == pred)
+        return float(self.match(label, pred))
 
     def match(self, label, pred):
-        return label == pred
+        return self.validate(label) == self.validate(pred)
 
 
 class AdaptTo(AdaptBy):
@@ -376,10 +379,10 @@ class Type(Validator):
         return value
 
     def score(self, label, pred):
-        return float(label == pred)
+        return float(self.match(label, pred))
 
     def match(self, label, pred):
-        return label == pred
+        return self.validate(label) == self.validate(pred)
 
     @property
     def humanized_name(self):
@@ -447,7 +450,9 @@ class Range(Validator):
         return self._validator.score(_label, _pred)
 
     def match(self, label, pred):
-        return self._validator.match(label, pred)
+        _label = self.validate(label)
+        _pred = self.validate(pred)
+        return self._validator.match(_label, _pred)
 
 
 class Number(Type):
@@ -512,8 +517,10 @@ class String(Type):
         return value
 
     def score(self, label, pred):
-        return fuzz.ratio(label.lower(), pred.lower()) / 100.0 if self._sim_lower else \
-            fuzz.ratio(label, pred) / 100.0
+        _label = self.validate(label)
+        _pred = self.validate(pred)
+        return fuzz.ratio(_label.lower(), _pred.lower()) / 100.0 if self._sim_lower else \
+            fuzz.ratio(_label, _pred) / 100.0
 
     def match(self, label, pred):
         return self.score(label, pred) > self._sim_threshold
@@ -714,7 +721,10 @@ class Mapping(Type):
     def score(self, label, pred):
         _label = self.validate(label)
         _pred = self.validate(pred)
-        return {k: self._value_validator.score(v, _pred[k]) for k, v in iteritems(_label)}
+        return {
+            k: self._value_validator.score(v, _pred[k]) if k in _pred else 0.0
+            for k, v in iteritems(_label)
+        }
 
     def match(self, label, pred):
         scores = self.score(label, pred)
@@ -850,7 +860,7 @@ class Object(Type):
         result = {}
         for name, validator in self._named_validators:
             if name in _label:
-                result[name] = validator.score(_label[name], _pred[name])
+                result[name] = validator.score(_label[name], _pred[name]) if name in _pred else 0.0
 
         return result
 
@@ -860,7 +870,7 @@ class Object(Type):
         result = {}
         for name, validator in self._named_validators:
             if name in _label:
-                result[name] = validator.match(_label[name], _pred[name])
+                result[name] = validator.match(_label[name], _pred[name]) if name in _pred else False
 
         return result
 
