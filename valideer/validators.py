@@ -804,6 +804,34 @@ class Object(Type):
         self._ignore_optional_errors = ignore_optional_errors
         self._sim_threshold = sim_threshold
 
+    def update_validator(self, name, validator, is_required=False):
+        '''Update a named validator and add if it does not exists
+
+        :param name: name for this validator
+        :param validator: validator
+        :param is_required: if the field is required
+        '''
+        if not isinstance(validator, Validator):
+            return False
+
+        self._all_keys.add(name)
+        if is_required:
+            self._required_keys.add(name)
+
+        for i, (_name, _validator) in enumerate(self._named_validators):
+            if name == _name:
+                self._named_validators[i] = (name, validator)
+                return True
+
+        self._named_validators.append((name, validator))
+        return True
+
+    def key_exists(self, name):
+        return name in self._all_keys
+
+    def get_keys(self):
+        return self._all_keys
+
     def validate(self, value, adapt=True):
         super(Object, self).validate(value)
         missing_required = self._required_keys.difference(value)
