@@ -48,6 +48,9 @@ class AnyOf(Validator):
         _pred = self.validate(pred)
         return any([validator.match(_label, _pred) for validator in self._validators])
 
+    def score_validity(self, value):
+        return np.max([validator.score_validity(value) for validator in self._validators])
+
     @property
     def humanized_name(self):
         return " or ".join(v.humanized_name for v in self._validators)
@@ -79,6 +82,9 @@ class AllOf(Validator):
         _pred = self.validate(pred)
         return all([validator.match(_label, _pred) for validator in self._validators])
 
+    def score_validity(self, value):
+        return np.min([validator.score_validity(value) for validator in self._validators])
+
     @property
     def humanized_name(self):
         return " and ".join(v.humanized_name for v in self._validators)
@@ -107,6 +113,9 @@ class ChainOf(Validator):
         _label = self.validate(label)
         _pred = self.validate(pred)
         return self._validators[-1].match(_label, _pred)
+
+    def score_validity(self, value):
+        return self._validators[-1].score_validity(value)
 
     @property
     def humanized_name(self):
@@ -153,6 +162,9 @@ class Nullable(Validator):
         _label = self.validate(label)
         _pred = self.validate(pred)
         return self._validator.match(_label, _pred)
+
+    def score_validity(self, value):
+        return self._validator.score_validity(value)
 
     @property
     def default(self):
@@ -204,6 +216,9 @@ class NonNullable(Validator):
         _label = self.validate(label)
         _pred = self.validate(pred)
         return self._validator.match(_label, _pred)
+
+    def score_validity(self, value):
+        return self._validator.score_validity(value)
 
     @property
     def humanized_name(self):
@@ -454,6 +469,9 @@ class Range(Validator):
         _pred = self.validate(pred)
         return self._validator.match(_label, _pred)
 
+    def score_validity(self, value):
+        return self._validator.score_validity(value)
+
 
 class Number(Type):
     """A validator that accepts any numbers (but not bool)."""
@@ -616,6 +634,10 @@ class HomogeneousSequence(Type):
         scores = self.score(label, pred)
         return np.mean(scores) > self._sim_threshold
 
+    def score_validity(self, value):
+        scores = [self._item_validator.score_validity(item) for item in value]
+        return np.mean(scores)            
+
     def _iter_validated_items(self, value, adapt):
         validate_item = self._item_validator.validate
         for i, item in enumerate(value):
@@ -668,6 +690,10 @@ class HeterogeneousSequence(Type):
     def match(self, label, pred):
         scores = self.score(label, pred)
         return np.mean(scores) > self._sim_threshold
+
+    def score_validity(self, value):
+        scores = [val.score_validity(item) for val, item in zip(self._item_validators, value)]
+        return np.mean(scores)
 
     def _iter_validated_items(self, value, adapt):
         for i, (validator, item) in enumerate(izip(self._item_validators, value)):
@@ -729,6 +755,12 @@ class Mapping(Type):
     def match(self, label, pred):
         scores = self.score(label, pred)
         return np.mean(scores.values()) > self._sim_threshold
+
+    def score_validity(self, value):
+        return {
+            k: self._value_validator.score_validity(v)
+            for k, v in iteritems(value)
+        }
 
     def _iter_validated_items(self, value, adapt):
         validate_key = validate_value = None
@@ -900,6 +932,12 @@ class Object(Type):
             if name in _label:
                 result[name] = validator.match(_label[name], _pred[name]) if name in _pred else False
 
+        return result
+
+    def score_validity(self, value):
+        result = {}
+        for name, validator in self._named_validators:
+            result[name] = validator.score_validity(value[name]) if name in value else 0.0
         return result
 
 
