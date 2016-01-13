@@ -265,6 +265,16 @@ class Validator(object):
         except ValidationError:
             return False
 
+    def score_validity(self, value):
+        """Score probability that the value is valid.
+        Can be overridden to provide more nuanced validity scores.
+
+        :returns: float between 0 and 1
+        """
+        if self.is_valid(value):
+            return 1.0
+        return 0.0
+
     def error(self, value):
         """Helper method that can be called when ``value`` is deemed invalid.
 
