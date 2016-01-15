@@ -935,22 +935,22 @@ class Object(Type):
         return result
 
     def score_validity(self, value):
-        sum = 0.0
+        total = []
         for name, validator in self._named_validators:
-            sum += validator.score_validity(value[name]) if name in value else 0.0
-        return sum / len(value.keys())
+            if name not in value and name not in self._required_keys:
+                continue
+            total.append(validator.score_validity(value[name]) if name in value else 0.0)
+        return np.mean(total)
 
     def annotate_validity(self, value):
         result = {'fields': [], 'confidence': 0.0}
-        sum = 0.0
         for name, validator in self._named_validators:
             if name not in value and name not in self._required_keys:
                 continue # absent and optional, skip
             v = value[name] if name in value else ''
             s = validator.score_validity(value[name]) if name in value else 0.0
             result['fields'].append({'field': validator.annotate_validity(v), 'confidence': s, 'id': name})
-            sum += s
-        result['confidence'] = sum / len(value.keys())
+        result['confidence'] = np.mean([f['confidence'] for f in result['fields']
         return result
 
 
