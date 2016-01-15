@@ -275,6 +275,9 @@ class Validator(object):
             return 1.0
         return 0.0
 
+    def annotate_validity(self, value):
+        return value
+
     def error(self, value):
         """Helper method that can be called when ``value`` is deemed invalid.
 

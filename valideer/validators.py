@@ -935,12 +935,18 @@ class Object(Type):
         return result
 
     def score_validity(self, value):
+        sum = 0.0
+        for name, validator in self._named_validators:
+            sum += validator.score_validity(value[name]) if name in value else 0.0
+        return sum / len(self._named_validators)
+
+    def annotate_validity(self, value):
         result = {'fields': [], 'confidence': 0.0}
         sum = 0.0
-        for name, validator in self._named_validators: #XXX where to check if field is required?
+        for name, validator in self._named_validators:
             v = value[name] if name in value else ''
             s = validator.score_validity(v)
-            result['fields'].append({'field': v, 'confidence': s, 'id': name})
+            result['fields'].append({'field': validator.annotate_validity(v), 'confidence': s, 'id': name})
             sum += s
         result['confidence'] = sum / len(self._named_validators)
         return result
