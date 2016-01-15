@@ -938,17 +938,19 @@ class Object(Type):
         sum = 0.0
         for name, validator in self._named_validators:
             sum += validator.score_validity(value[name]) if name in value else 0.0
-        return sum / len(self._named_validators)
+        return sum / len(value.keys())
 
     def annotate_validity(self, value):
         result = {'fields': [], 'confidence': 0.0}
         sum = 0.0
         for name, validator in self._named_validators:
+            if name not in value and name not in self._required_keys:
+                continue # absent and optional, skip
             v = value[name] if name in value else ''
-            s = validator.score_validity(v)
+            s = validator.score_validity(value[name]) if name in value else 0.0
             result['fields'].append({'field': validator.annotate_validity(v), 'confidence': s, 'id': name})
             sum += s
-        result['confidence'] = sum / len(self._named_validators)
+        result['confidence'] = sum / len(value.keys())
         return result
 
 

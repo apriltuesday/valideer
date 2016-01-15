@@ -276,6 +276,9 @@ class Validator(object):
         return 0.0
 
     def annotate_validity(self, value):
+        """
+        Annotates an object with its validity score.
+        """
         return value
 
     def error(self, value):
