@@ -950,7 +950,7 @@ class Object(Type):
             v = value[name] if name in value else ''
             s = validator.score_validity(value[name]) if name in value else 0.0
             result['fields'].append({'field': validator.annotate_validity(v), 'confidence': s, 'id': name})
-        result['confidence'] = np.mean([f['confidence'] for f in result['fields']
+        result['confidence'] = np.mean([f['confidence'] for f in result['fields']])
         return result
 
 
