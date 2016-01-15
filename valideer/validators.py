@@ -941,7 +941,7 @@ class Object(Type):
             v = value[name] if name in value else ''
             s = validator.score_validity(v)
             result['fields'].append({'field': v, 'confidence': s, 'id': name})
-            sum += score
+            sum += s
         result['confidence'] = sum / len(self._named_validators)
         return result
 
