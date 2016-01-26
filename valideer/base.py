@@ -275,11 +275,6 @@ class Validator(object):
             return 1.0
         return 0.0
 
-    def _get_validity(self, value):
-        """Helper method scoring validity of Objects.
-        """
-        return self.score_validity(value)
-
     def error(self, value):
         """Helper method that can be called when ``value`` is deemed invalid.
 

@@ -942,30 +942,9 @@ class Object(Type):
             if name not in value and name not in self._required_keys:
                 continue
             score = validator.score_validity(value[name]) if name in value else 0.0
-            total += score
+            total += score["score"] if type(score) is dict else score
             result["field_scores"][name] = score
         result["score"] = total / len(value)
-        return result
-
-    def _get_validity(self, value):
-        result = {}
-        for name, validator in self._named_validators:
-            if name not in value and name not in self._required_keys:
-                continue
-            result[name] = validator._get_validity(value[name]) if name in value else 0.0
-        return result
-
-    def _annotate_recurse(self, value, scores):
-        result = {"fields": {}, "confidence": 0.0}
-        total = 0.0
-        for field, val in value.iteritems():
-            score = scores[field]
-            if type(val) is dict:
-                result['fields'][field] = self._annotate_recurse(val, score)
-            else:
-                result['fields'][field] = {'value': val, 'confidence': score}
-            total += result['fields'][field]['confidence']
-        result['confidence'] = total / len(value)
         return result
 
 
@@ -1000,3 +979,21 @@ def _format_types(types):
     if len(names) > 1:
         s = ", ".join(names[:-1]) + " or " + s
     return s
+
+if __name__ == '__main__':
+        validator = parse({"foo": "number", "bar": {"a": "string", "b": "string"}})
+        obj = {"foo": 5, "bar": {"a": "hello", "b": 4}}
+        result = {
+            "score": 0.75,
+            "field_scores": {
+                "foo": 1.0,
+                "bar": {
+                    "score": 0.5,
+                    "field_scores": {
+                        "a": 1.0,
+                        "b": 0.0
+                    }
+                }
+            }
+        }
+        assert validator.score_validity(obj) == result
