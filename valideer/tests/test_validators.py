@@ -960,12 +960,19 @@ class TestValidator(unittest.TestCase):
     def test_score_validity(self):
         validator = self.parse({"foo": "number", "bar": {"a": "string", "b": "string"}})
         obj = {"foo": 5, "bar": {"a": "hello", "b": 4}}
-        result = {"fields": {"foo": {"value": 5, "confidence": 1.0},
-                             "bar": {"fields":
-                                         {"a": {"value": "hello", "confidence": 1.0},
-                                          "b": {"value": 4, "confidence": 0.0}},
-                                     "confidence": 0.5}},
-                  "confidence": 0.75}
+        result = {
+            "score": 0.75,
+            "field_scores": {
+                "foo": 1.0,
+                "bar": {
+                    "score": 0.5,
+                    "field_scores": {
+                        "a": 1.0,
+                        "b": 0.0
+                    }
+                }
+            }
+        }
         self.assertEqual(validator.score_validity(obj), result)
 
 

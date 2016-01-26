@@ -936,8 +936,16 @@ class Object(Type):
 
 
     def score_validity(self, value):
-        scores = self._get_validity(value)
-        return self._annotate_recurse(value, scores)
+        total = 0.0
+        result = {"score": 0.0, "field_scores": {}}
+        for name, validator in self._named_validators:
+            if name not in value and name not in self._required_keys:
+                continue
+            score = validator.score_validity(value[name]) if name in value else 0.0
+            total += score
+            result["field_scores"][name] = score
+        result["score"] = total / len(value)
+        return result
 
     def _get_validity(self, value):
         result = {}
