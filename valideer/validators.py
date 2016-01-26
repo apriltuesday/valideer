@@ -636,7 +636,7 @@ class HomogeneousSequence(Type):
 
     def score_validity(self, value):
         scores = [self._item_validator.score_validity(item) for item in value]
-        return np.mean(scores)            
+        return np.mean(scores)
 
     def _iter_validated_items(self, value, adapt):
         validate_item = self._item_validator.validate
@@ -934,23 +934,30 @@ class Object(Type):
 
         return result
 
+
     def score_validity(self, value):
-        total = []
+        scores = self._get_validity(value)
+        return self._annotate_recurse(value, scores)
+
+    def _get_validity(self, value):
+        result = {}
         for name, validator in self._named_validators:
             if name not in value and name not in self._required_keys:
                 continue
-            total.append(validator.score_validity(value[name]) if name in value else 0.0)
-        return np.mean(total)
+            result[name] = validator._get_validity(value[name]) if name in value else 0.0
+        return result
 
-    def annotate_validity(self, value):
-        result = {'fields': [], 'confidence': 0.0}
-        for name, validator in self._named_validators:
-            if name not in value and name not in self._required_keys:
-                continue # absent and optional, skip
-            v = value[name] if name in value else ''
-            s = validator.score_validity(value[name]) if name in value else 0.0
-            result['fields'].append({'field': validator.annotate_validity(v), 'confidence': s, 'id': name})
-        result['confidence'] = np.mean([f['confidence'] for f in result['fields']])
+    def _annotate_recurse(self, value, scores):
+        result = {"fields": {}, "confidence": 0.0}
+        total = 0.0
+        for field, val in value.iteritems():
+            score = scores[field]
+            if type(val) is dict:
+                result['fields'][field] = self._annotate_recurse(val, score)
+            else:
+                result['fields'][field] = {'value': val, 'confidence': score}
+            total += result['fields'][field]['confidence']
+        result['confidence'] = total / len(value)
         return result
 
 
