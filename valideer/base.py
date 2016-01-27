@@ -266,8 +266,9 @@ class Validator(object):
             return False
 
     def score_validity(self, value):
-        """Score probability that the value is valid.
-        Can be overridden to provide more nuanced validity scores.
+        """Score probability that the value is valid.  Can be overridden to
+        provide more nuanced validity scores, including per-field scores
+        for objects.
 
         :returns: float between 0 and 1
         """

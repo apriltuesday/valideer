@@ -979,21 +979,3 @@ def _format_types(types):
     if len(names) > 1:
         s = ", ".join(names[:-1]) + " or " + s
     return s
-
-if __name__ == '__main__':
-        validator = parse({"foo": "number", "bar": {"a": "string", "b": "string"}})
-        obj = {"foo": 5, "bar": {"a": "hello", "b": 4}}
-        result = {
-            "score": 0.75,
-            "field_scores": {
-                "foo": 1.0,
-                "bar": {
-                    "score": 0.5,
-                    "field_scores": {
-                        "a": 1.0,
-                        "b": 0.0
-                    }
-                }
-            }
-        }
-        assert validator.score_validity(obj) == result
