@@ -937,14 +937,16 @@ class Object(Type):
 
     def score_validity(self, value):
         total = 0.0
+        count = 0
         result = {"score": 0.0, "field_scores": {}}
         for name, validator in self._named_validators:
             if name not in value and name not in self._required_keys:
                 continue
             score = validator.score_validity(value[name]) if name in value else 0.0
-            total += score["score"] if type(score) is dict else score
+            total += score["score"] if isinstance(score, dict) else score
             result["field_scores"][name] = score
-        result["score"] = total / len(value)
+            count += 1
+        result["score"] = total / count if count > 0 else 0.0
         return result
 
 
