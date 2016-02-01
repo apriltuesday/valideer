@@ -871,7 +871,12 @@ class Object(Type):
     def get_keys(self):
         return self._all_keys
 
-    def validate(self, value, adapt=True):
+    def get_validator(self, name):
+        if self.key_exists(name):
+            return [val for key, val in self._named_validators if key==name][0]
+        return None
+
+    def validate(self, value, adapt=True): # XXX do we need to change this to be consistent?
         super(Object, self).validate(value)
         missing_required = self._required_keys.difference(value)
         if missing_required:
@@ -943,17 +948,22 @@ class Object(Type):
 
 
     def score_validity(self, value):
-        total = 0.0
-        count = 0
-        result = {"score": 0.0, "field_scores": {}}
-        for name, validator in self._named_validators:
-            if name not in value and name not in self._required_keys:
+        # result must have scores for the required keys, even if not
+        # present in value
+        result = {"score": 0.0, "field_scores": {k: 0.0 for k in self._required_keys}}
+        for key, val in value.iteritems():
+            if not self.key_exists(key):
+                raise KeyError("Key not found: {0}".format(key))
+            validator = self.get_validator(key)
+            score = validator.score_validity(val)
+            score_num = score["score"] if isinstance(score, dict) else score
+            # can ignore this field if not required
+            if score_num == 0.0 and key not in self._required_keys:
                 continue
-            score = validator.score_validity(value[name]) if name in value else 0.0
-            total += score["score"] if isinstance(score, dict) else score
-            result["field_scores"][name] = score
-            count += 1
-        result["score"] = total / count if count > 0 else 0.0
+            result["field_scores"][key] = score
+            result["score"] += score_num
+        if len(result["field_scores"]) > 0:
+            result["score"] /= len(result["field_scores"])
         return result
 
 

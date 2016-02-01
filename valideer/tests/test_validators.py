@@ -958,17 +958,17 @@ class TestValidator(unittest.TestCase):
                         self.assertEqual(error_repr, error, "Actual error: %r" % error_repr)
 
     def test_score_validity(self):
-        validator = self.parse({"foo": "number", "bar": {"a": "string", "b": "string"}})
+        # Normal behavior
+        validator = self.parse({"+foo": "number", "+bar": {"+a": "string", "?b": "string"}})
         obj = {"foo": 5, "bar": {"a": "hello", "b": 4}}
         result = {
-            "score": 0.75,
+            "score": 1.0,
             "field_scores": {
                 "foo": 1.0,
                 "bar": {
-                    "score": 0.5,
+                    "score": 1.0,
                     "field_scores": {
-                        "a": 1.0,
-                        "b": 0.0
+                        "a": 1.0
                     }
                 }
             }
@@ -984,6 +984,10 @@ class TestValidator(unittest.TestCase):
         obj = {"foo": [], "bar": "hello"}
         result = {"score": 0.5, "field_scores": {"foo": 0.0, "bar": 1.0}}
         self.assertEqual(validator.score_validity(obj), result)
+
+        # Test fields in object but not in schema
+        obj = {"foo": [], "bar": "", "squee": 5}
+        self.assertRaises(KeyError, validator.score_validity, obj)
 
 
 class TestValidatorModuleParse(TestValidator):
