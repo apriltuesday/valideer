@@ -164,6 +164,8 @@ class Nullable(Validator):
         return self._validator.match(_label, _pred)
 
     def score_validity(self, value):
+        if value is None:
+            return 1.0
         return self._validator.score_validity(value)
 
     @property
@@ -218,6 +220,8 @@ class NonNullable(Validator):
         return self._validator.match(_label, _pred)
 
     def score_validity(self, value):
+        if value is None:
+            return 0.0
         return self._validator.score_validity(value)
 
     @property
@@ -470,6 +474,9 @@ class Range(Validator):
         return self._validator.match(_label, _pred)
 
     def score_validity(self, value):
+        if ((self._min_value is not None and value < self._min_value) or
+            (self._max_value is not None and value > self._max_value)):
+            return 0.0
         return self._validator.score_validity(value)
 
 
@@ -636,7 +643,7 @@ class HomogeneousSequence(Type):
 
     def score_validity(self, value):
         scores = [self._item_validator.score_validity(item) for item in value]
-        return np.mean(scores)
+        return np.mean(scores) if len(scores) > 0 else 0.0
 
     def _iter_validated_items(self, value, adapt):
         validate_item = self._item_validator.validate
@@ -693,7 +700,7 @@ class HeterogeneousSequence(Type):
 
     def score_validity(self, value):
         scores = [val.score_validity(item) for val, item in zip(self._item_validators, value)]
-        return np.mean(scores)
+        return np.mean(scores) if len(scores) > 0 else 0.0
 
     def _iter_validated_items(self, value, adapt):
         for i, (validator, item) in enumerate(izip(self._item_validators, value)):

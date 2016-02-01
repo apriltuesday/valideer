@@ -975,6 +975,16 @@ class TestValidator(unittest.TestCase):
         }
         self.assertEqual(validator.score_validity(obj), result)
 
+        # Test empty objects and lists
+        validator = self.parse({"+foo": ["number"], "+bar": "string"})
+        obj = {}
+        result = {"score": 0.0, "field_scores": {"foo": 0.0, "bar": 0.0}}
+        self.assertEqual(validator.score_validity(obj), result)
+
+        obj = {"foo": [], "bar": "hello"}
+        result = {"score": 0.5, "field_scores": {"foo": 0.0, "bar": 1.0}}
+        self.assertEqual(validator.score_validity(obj), result)
+
 
 class TestValidatorModuleParse(TestValidator):
 
